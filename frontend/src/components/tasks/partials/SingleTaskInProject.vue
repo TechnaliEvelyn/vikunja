@@ -110,7 +110,7 @@
 					<template #content="{isOpen}">
 						<DeferTask
 							v-if="isOpen"
-							v-model="task"
+							:model-value="task"
 						/>
 					</template>
 				</Popup>

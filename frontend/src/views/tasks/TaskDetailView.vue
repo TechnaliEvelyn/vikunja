@@ -289,9 +289,9 @@
 								</div>
 								<RepeatAfter
 									:ref="e => setFieldRef('repeatAfter', e)"
-									v-model="task"
+									:model-value="task"
 									:disabled="!canWrite"
-									@update:modelValue="saveTask()"
+									@update:modelValue="saveTask($event)"
 								/>
 							</div>
 						</CustomTransition>
