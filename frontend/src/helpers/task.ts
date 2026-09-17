@@ -5,7 +5,7 @@ import {REMINDER_PERIOD_RELATIVE_TO_TYPES} from '@/types/IReminderPeriodRelative
 import {secondsToPeriod, periodToSeconds} from '@/helpers/time/period'
 import {cleanupItemText, parseTaskText, PREFIXES, type PrefixMode} from '@/modules/quickAddMagic'
 
-export function createTaskDraft(data: Partial<Task> = {}) {
+export function createTaskDraft(data: Partial<Task> = {}): Task {
 	return {
 		...data,
 		id: data.id ?? 0, description: data.description ?? '', done: data.done ?? false, priority: data.priority ?? 0,
