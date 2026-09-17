@@ -32,6 +32,7 @@ export function parseRepeatAfter(seconds = 0): IRepeatAfter {
 	return {type: unit, amount}
 }
 
+// Nested related tasks are plain API objects, so repeat arrives as a parsed object, raw seconds, or not at all.
 export function repeatAfterToSeconds(repeat?: number | IRepeatAfter | null): number {
 	if (typeof repeat === 'number') return repeat
 	return repeat?.amount ? periodToSeconds(repeat.amount, repeat.type) : 0
@@ -40,6 +41,7 @@ export function repeatAfterToSeconds(repeat?: number | IRepeatAfter | null): num
 export function mergeTask(task: Task, updated: Task): Task {
 	return {
 		...task, ...updated,
+		// Write responses carry no view context, so cached per-view values win.
 		position: task.position ?? updated.position, bucket_id: task.bucket_id ?? updated.bucket_id,
 		assignees: updated.assignees ?? task.assignees,
 		labels: updated.labels ?? task.labels,
