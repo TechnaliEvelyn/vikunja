@@ -29,3 +29,18 @@ describe('task cache reconciliation', () => {
 		expect(client.getQueryCache().getAll()).toHaveLength(0)
 	})
 })
+
+it('removes moved tasks from their former project list and board', () => {
+	const client = new QueryClient()
+	const task = {id: 1, project_id: 1}
+	const list = taskKeys.list({project: 1})
+	const board = kanbanKeys.board(1, 2)
+	const all = taskKeys.allList({project: 1})
+	client.setQueryData(all, [task])
+	client.setQueryData(list, {pages: [{items: [task], total: 1}], pageParams: [1]})
+	client.setQueryData(board, {buckets: [{id: 3, tasks: [task], count: 1}], pages: {3: 1}, hasMore: {3: false}})
+	replaceTaskEverywhere(client, {id: 1, project_id: 2})
+	expect(client.getQueryData<Task[]>(all)).toEqual([])
+	expect(client.getQueryData<InfiniteData<PaginatedTask>>(list)?.pages[0]).toMatchObject({items: [], total: 0})
+	expect(client.getQueryData<BoardData>(board)?.buckets[0]).toMatchObject({tasks: [], count: 0})
+})
