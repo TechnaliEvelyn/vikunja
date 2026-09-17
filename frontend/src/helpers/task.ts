@@ -3,7 +3,7 @@ import {REPEAT_TYPES, type IRepeatAfter} from '@/types/IRepeatAfter'
 import {TASK_REPEAT_MODES} from '@/types/IRepeatMode'
 import {REMINDER_PERIOD_RELATIVE_TO_TYPES} from '@/types/IReminderPeriodRelativeTo'
 import {secondsToPeriod, periodToSeconds} from '@/helpers/time/period'
-import {cleanupItemText, parseTaskText, PREFIXES, type PrefixMode} from '@/modules/quickAddMagic'
+import {cleanupItemText, PREFIXES, type ParsedTaskText, type PrefixMode} from '@/modules/quickAddMagic'
 
 export function createTaskDraft(data: Partial<Task> = {}): Task {
 	return {
@@ -89,20 +89,16 @@ export function buildDefaultRemindersForQuickAdd(defaults: readonly TaskReminder
 	return dueDate ? (defaults ?? []).map(reminder => ({relative_period: reminder.relative_period, relative_to: REMINDER_PERIOD_RELATIVE_TO_TYPES.DUEDATE})) : []
 }
 
-export function buildQuickAddTask(input: Partial<Task>, mode: PrefixMode, assignees: (User & {match: string})[], defaults?: readonly TaskReminder[]) {
-	const parsed = parseTaskText(input.title ?? '', mode)
-	if (!parsed.text) return {task: createTaskDraft(input), parsedLabels: [] as string[]}
+export function buildQuickAddTask(parsed: ParsedTaskText, input: Partial<Task>, mode: PrefixMode, assignees: (User & {match: string})[], defaults?: readonly TaskReminder[]): Task {
+	if (!parsed.text) return createTaskDraft(input)
 	const prefix = PREFIXES[mode]?.assignee
 	const title = prefix ? cleanupItemText(parsed.text, assignees.map(user => user.match), prefix) : parsed.text
 	const dueDate = parsed.date?.toISOString()
-	return {
-		task: createTaskDraft({
-			...input, title, due_date: dueDate, priority: parsed.priority ?? 0,
-			assignees: assignees.map(({match: _match, ...user}) => user),
-			repeat_after: repeatAfterToSeconds(parsed.repeats),
-			repeat_mode: parsed.repeats?.type === REPEAT_TYPES.Months && parsed.repeats.amount === 1 ? TASK_REPEAT_MODES.REPEAT_MODE_MONTH : TASK_REPEAT_MODES.REPEAT_MODE_DEFAULT,
-			reminders: buildDefaultRemindersForQuickAdd(defaults, dueDate),
-		}),
-		parsedLabels: parsed.labels,
-	}
+	return createTaskDraft({
+		...input, title, due_date: dueDate, priority: parsed.priority ?? 0,
+		assignees: assignees.map(({match: _match, ...user}) => user),
+		repeat_after: repeatAfterToSeconds(parsed.repeats),
+		repeat_mode: parsed.repeats?.type === REPEAT_TYPES.Months && parsed.repeats.amount === 1 ? TASK_REPEAT_MODES.REPEAT_MODE_MONTH : TASK_REPEAT_MODES.REPEAT_MODE_DEFAULT,
+		reminders: buildDefaultRemindersForQuickAdd(defaults, dueDate),
+	})
 }
