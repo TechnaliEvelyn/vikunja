@@ -137,7 +137,7 @@ test.describe('Task', () => {
 
 		// Wait for the favorite API response
 		const favoritePromise = page.waitForResponse(response =>
-			response.url().includes('/tasks/') && response.request().method() === 'POST',
+			response.url().includes('/tasks/') && response.request().method() === 'PATCH',
 		)
 		await favoriteButton.click()
 		await favoritePromise
@@ -567,7 +567,7 @@ test.describe('Task', () => {
 			await expect(assignees).toHaveCount(1)
 
 			const saved = page.waitForResponse(r =>
-				r.url().includes(`/tasks/${task.id}`) && r.request().method() === 'POST',
+				r.url().includes(`/tasks/${task.id}`) && r.request().method() === 'PATCH',
 			)
 			await page.locator('.task-view .action-buttons .button').filter({hasText: 'Set Priority'}).click()
 			await page.locator('.task-view .columns.details .column').filter({hasText: 'Priority'}).locator('.select select').selectOption('Urgent')
@@ -911,7 +911,7 @@ test.describe('Task', () => {
 			await popup.getByRole('textbox', {name: 'Minutes', exact: true}).fill('37')
 
 			const [response] = await Promise.all([
-				page.waitForResponse(r => r.url().endsWith(`/tasks/${tasks[0].id}`) && r.request().method() === 'POST', {timeout: 5000}),
+				page.waitForResponse(r => r.url().endsWith(`/tasks/${tasks[0].id}`) && r.request().method() === 'PATCH', {timeout: 5000}),
 				popup.getByRole('button', {name: 'Confirm', exact: true}).click(),
 			])
 			expect(response.ok()).toBeTruthy()
@@ -1214,8 +1214,8 @@ test.describe('Task', () => {
 
 			// Track whether any task save request fires
 			let saveRequestFired = false
-			await page.route('**/api/v1/tasks/*', async (route) => {
-				if (route.request().method() === 'POST' || route.request().method() === 'PUT') {
+			await page.route('**/api/v2/tasks/*', async (route) => {
+				if (route.request().method() === 'PATCH') {
 					saveRequestFired = true
 				}
 				await route.continue()

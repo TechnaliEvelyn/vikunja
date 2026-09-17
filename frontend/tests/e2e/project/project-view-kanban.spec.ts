@@ -142,6 +142,8 @@ test.describe('Project View Kanban', () => {
 
 		await expect(page.locator('.kanban .bucket:nth-child(2) .tasks')).toContainText(tasks[0].title)
 		await expect(page.locator('.kanban .bucket:nth-child(1) .tasks')).not.toContainText(tasks[0].title)
+		await page.reload()
+		await expect(page.locator('.kanban .bucket:nth-child(2) .tasks')).toContainText(tasks[0].title)
 	})
 
 	test('Recurring task dropped on done bucket moves back to the default bucket', async ({authenticatedPage: page}) => {
@@ -311,6 +313,7 @@ test.describe('Project View Kanban', () => {
 			id: 4,
 			project_id: 1,
 			view_kind: 3,
+			bucket_configuration_mode: 1,
 		})
 		const buckets = await BucketFactory.create(2, {
 			project_view_id: 4,
@@ -338,6 +341,7 @@ test.describe('Project View Kanban', () => {
 			id: 4,
 			project_id: 1,
 			view_kind: 3,
+			bucket_configuration_mode: 1,
 		})
 		const buckets = await BucketFactory.create(2, {
 			project_view_id: 4,
@@ -352,8 +356,7 @@ test.describe('Project View Kanban', () => {
 		// Wait for search results to load and verify searchable task is visible
 		await expect(page.locator('.kanban')).toContainText(searchableTask.title, {timeout: 10000})
 
-		// Verify only one task is shown (the search result) - count task headings
-		await expect(page.locator('main h2')).toHaveCount(1)
+		await expect(page.locator('.kanban .task')).toHaveCount(1)
 	})
 
 	test('Should not show task count by default when bucket has no limit', async ({authenticatedPage: page}) => {

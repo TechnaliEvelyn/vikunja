@@ -293,8 +293,8 @@ test.describe('Drag Task to Project in Sidebar', () => {
 			await expect(page.locator('.tasks')).toContainText(tasks[0].title)
 
 			// Intercept the task update API call and return an error
-			await page.route('**/api/v1/tasks/*', async (route) => {
-				if (route.request().method() === 'POST') {
+			await page.route('**/api/v2/tasks/*', async (route) => {
+				if (route.request().method() === 'PATCH') {
 					await route.fulfill({
 						status: 500,
 						contentType: 'application/json',
