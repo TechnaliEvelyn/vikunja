@@ -1,15 +1,14 @@
 import {describe, expect, it} from 'vitest'
-import {createTaskDraft, getTaskIdentifier, getHexColor, parseRepeatAfter, repeatAfterToSeconds, replaceTask, removeTask, moveTaskToBucket, getDefaultBucketId, buildDefaultRemindersForQuickAdd, buildQuickAddTask} from './task'
-import {parseTaskText, PrefixMode} from '@/modules/quickAddMagic'
+import {createTaskDraft, getTaskIdentifier, getHexColor, parseRepeatAfter, repeatAfterToSeconds, mergeTask, replaceTask, removeTask, moveTaskToBucket, getDefaultBucketId, buildDefaultRemindersForQuickAdd, buildQuickAddTask} from './task'
+import {parseTaskText, PrefixMode, type ParsedTaskText} from '@/modules/quickAddMagic'
 import type {Bucket, Task} from '@/client/generated'
 import type {IRepeatAfter} from '@/types/IRepeatAfter'
+import {TASK_REPEAT_MODES} from '@/types/IRepeatMode'
 
 describe('task domain helpers', () => {
-	it('provides independent drafts using wire fields and timestamp strings', () => {
-		const first = createTaskDraft({title: ' New task ', due_date: '2026-09-17T12:00:00Z'})
-		first.reminders!.push({relative_period: -60})
-		expect(createTaskDraft().reminders).toEqual([])
-		expect(first).toMatchObject({title: 'New task', due_date: '2026-09-17T12:00:00Z', repeat_after: 0})
+	it('fills wire defaults for fields explicitly set to undefined', () => {
+		expect(createTaskDraft({title: ' New task ', due_date: '2026-09-17T12:00:00Z'})).toMatchObject({title: 'New task', due_date: '2026-09-17T12:00:00Z', repeat_after: 0})
+		expect(createTaskDraft({labels: undefined}).labels).toEqual([])
 	})
 	it('formats identifiers and optional colors without changing task data', () => {
 		expect(getTaskIdentifier({identifier: 'WORK-2', index: 2})).toBe('WORK-2')
@@ -33,11 +32,19 @@ describe('task domain helpers', () => {
 		expect(replaceTask(tasks, {id: 1, title: 'new', position: 0})).toMatchObject([{title: 'new', position: 42, labels: [{id: 2}]}])
 		expect(replaceTask(tasks, {id: 2, title: 'new child'})[0].related_tasks?.subtask).toEqual([{id: 2, title: 'new child'}])
 		expect(removeTask(tasks, 2)[0].related_tasks?.subtask).toEqual([])
+		expect(removeTask(tasks, 1)).toEqual([])
 		expect(tasks[0].title).toBe('old')
+	})
+	it('keeps cached attachments, reactions and creator when a response omits them', () => {
+		const cached: Task = {id: 1, attachments: [{id: 5}], reactions: {'👍': [{id: 6}]}, created_by: {id: 7}}
+		expect(mergeTask(cached, {id: 1, title: 'new'})).toEqual({...cached, title: 'new'})
+		expect(mergeTask(cached, {id: 1, attachments: [], reactions: {}, created_by: {id: 8}})).toEqual({id: 1, attachments: [], reactions: {}, created_by: {id: 8}})
 	})
 	it('moves only between loaded buckets and preserves counts', () => {
 		const buckets: Bucket[] = [{id: 1, count: 10, tasks: [{id: 4, bucket_id: 1}]}, {id: 2, count: 5, tasks: []}]
 		expect(moveTaskToBucket(buckets, {id: 4}, 99)).toBe(buckets)
+		expect(moveTaskToBucket(buckets, {id: 7}, 2)).toBe(buckets)
+		expect(moveTaskToBucket(buckets, {id: 4}, 1)).toBe(buckets)
 		const moved = moveTaskToBucket(buckets, {id: 4, title: 'moved'}, 2)
 		expect(moved).toMatchObject([{count: 9, tasks: []}, {count: 6, tasks: [{id: 4, bucket_id: 2}]}])
 		expect(buckets[0].count).toBe(10)
@@ -66,9 +73,19 @@ describe('task domain helpers', () => {
 		expect(task.assignees).toEqual([{id: 2, username: 'alice'}])
 		expect(parsed.labels).toEqual(['label'])
 	})
-})
-
-it('retains embedded resources omitted from a task write response', () => {
- const task = {id: 1, labels: [{id: 2}], related_tasks: {subtask: [{id: 3}]}, assignees: [{id: 4}]}
- expect(replaceTask([task], {id: 1, title: 'new', labels: null, assignees: null})[0]).toMatchObject({...task, title: 'new'})
+	it('keeps the raw input title when quick add magic parses no text', () => {
+		const parsed: ParsedTaskText = {text: '', date: null, labels: [], project: null, priority: null, assignees: [], repeats: null}
+		expect(buildQuickAddTask(parsed, {title: ' *label ', project_id: 1}, PrefixMode.Default, [])).toMatchObject({title: '*label', project_id: 1, priority: 0, repeat_after: 0, repeat_mode: 0, labels: []})
+	})
+	it('marks monthly repeats with the month repeat mode instead of an interval', () => {
+		const parsed = parseTaskText('Task every month', PrefixMode.Default)
+		const task = buildQuickAddTask(parsed, {title: 'Task every month', project_id: 1}, PrefixMode.Default, [])
+		expect(task.title).toBe('Task')
+		expect(task.repeat_mode).toBe(TASK_REPEAT_MODES.REPEAT_MODE_MONTH)
+		expect(task.repeat_after).toBe(0)
+	})
+	it('retains embedded resources omitted from a task write response', () => {
+		const task = {id: 1, labels: [{id: 2}], related_tasks: {subtask: [{id: 3}]}, assignees: [{id: 4}]}
+		expect(replaceTask([task], {id: 1, title: 'new', labels: null, assignees: null})[0]).toMatchObject({...task, title: 'new'})
+	})
 })
