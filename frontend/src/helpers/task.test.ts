@@ -2,6 +2,7 @@ import {describe, expect, it} from 'vitest'
 import {createTaskDraft, getTaskIdentifier, getHexColor, parseRepeatAfter, repeatAfterToSeconds, replaceTask, removeTask, moveTaskToBucket, getDefaultBucketId, buildDefaultRemindersForQuickAdd, buildQuickAddTask} from './task'
 import {PrefixMode} from '@/modules/quickAddMagic'
 import type {Bucket, Task} from '@/client/generated'
+import type {IRepeatAfter} from '@/types/IRepeatAfter'
 
 describe('task domain helpers', () => {
 	it('provides independent drafts using wire fields and timestamp strings', () => {
@@ -22,8 +23,10 @@ describe('task domain helpers', () => {
 	it('converts repeat periods at the form boundary', () => {
 		expect(parseRepeatAfter(604800)).toEqual({type: 'weeks', amount: 1})
 		expect(repeatAfterToSeconds({type: 'days', amount: 3})).toBe(259200)
+		expect(repeatAfterToSeconds({type: 'minutes', amount: 30})).toBe(1800)
 		expect(repeatAfterToSeconds(3600)).toBe(3600)
 		expect(repeatAfterToSeconds(undefined)).toBe(0)
+		expect(repeatAfterToSeconds({type: 'days'} as IRepeatAfter)).toBe(0)
 	})
 	it('replaces nested tasks without losing view positions or expansions', () => {
 		const tasks: Task[] = [{id: 1, title: 'old', position: 42, labels: [{id: 2}], related_tasks: {subtask: [{id: 2, title: 'old child'}]}}]
