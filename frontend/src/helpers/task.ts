@@ -1,5 +1,7 @@
 import type {Bucket, ProjectView, Task, TaskReminder, User} from '@/client/generated'
-import type {IRepeatAfter} from '@/types/IRepeatAfter'
+import {REPEAT_TYPES, type IRepeatAfter} from '@/types/IRepeatAfter'
+import {TASK_REPEAT_MODES} from '@/types/IRepeatMode'
+import {REMINDER_PERIOD_RELATIVE_TO_TYPES} from '@/types/IReminderPeriodRelativeTo'
 import {secondsToPeriod, periodToSeconds} from '@/helpers/time/period'
 import {cleanupItemText, parseTaskText, PREFIXES, type PrefixMode} from '@/modules/quickAddMagic'
 
@@ -84,7 +86,7 @@ export function moveTaskToBucket(buckets: Bucket[], task: Task, bucketId: number
 }
 
 export function buildDefaultRemindersForQuickAdd(defaults: readonly TaskReminder[] | undefined, dueDate?: string | null): TaskReminder[] {
-	return dueDate ? (defaults ?? []).map(reminder => ({relative_period: reminder.relative_period, relative_to: 'due_date'})) : []
+	return dueDate ? (defaults ?? []).map(reminder => ({relative_period: reminder.relative_period, relative_to: REMINDER_PERIOD_RELATIVE_TO_TYPES.DUEDATE})) : []
 }
 
 export function buildQuickAddTask(input: Partial<Task>, mode: PrefixMode, assignees: (User & {match: string})[], defaults?: readonly TaskReminder[]) {
@@ -98,7 +100,7 @@ export function buildQuickAddTask(input: Partial<Task>, mode: PrefixMode, assign
 			...input, title, due_date: dueDate, priority: parsed.priority ?? 0,
 			assignees: assignees.map(({match: _match, ...user}) => user),
 			repeat_after: repeatAfterToSeconds(parsed.repeats),
-			repeat_mode: parsed.repeats?.type === 'months' && parsed.repeats.amount === 1 ? 1 : 0,
+			repeat_mode: parsed.repeats?.type === REPEAT_TYPES.Months && parsed.repeats.amount === 1 ? TASK_REPEAT_MODES.REPEAT_MODE_MONTH : TASK_REPEAT_MODES.REPEAT_MODE_DEFAULT,
 			reminders: buildDefaultRemindersForQuickAdd(defaults, dueDate),
 		}),
 		parsedLabels: parsed.labels,
