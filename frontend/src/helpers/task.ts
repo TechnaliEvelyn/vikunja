@@ -31,7 +31,8 @@ export function parseRepeatAfter(seconds = 0): IRepeatAfter {
 }
 
 export function repeatAfterToSeconds(repeat?: number | IRepeatAfter | null): number {
-	return typeof repeat === 'number' ? repeat : repeat ? periodToSeconds(repeat.amount, repeat.type) : 0
+	if (typeof repeat === 'number') return repeat
+	return repeat?.amount ? periodToSeconds(repeat.amount, repeat.type) : 0
 }
 
 export function mergeTask(task: Task, updated: Task): Task {
