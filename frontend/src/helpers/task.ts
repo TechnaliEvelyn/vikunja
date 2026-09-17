@@ -34,21 +34,30 @@ export function repeatAfterToSeconds(repeat?: number | IRepeatAfter | null): num
 	return typeof repeat === 'number' ? repeat : repeat ? periodToSeconds(repeat.amount, repeat.type) : 0
 }
 
-export function replaceTask(tasks: readonly Task[], updated: Task): Task[] {
+export function mergeTask(task: Task, updated: Task): Task {
+	return {
+		...task, ...updated,
+		position: task.position ?? updated.position, bucket_id: task.bucket_id ?? updated.bucket_id,
+		assignees: updated.assignees ?? task.assignees,
+		labels: updated.labels ?? task.labels,
+		attachments: updated.attachments ?? task.attachments,
+		related_tasks: updated.related_tasks ?? task.related_tasks,
+		reactions: updated.reactions ?? task.reactions,
+		created_by: updated.created_by ?? task.created_by,
+	}
+}
+
+export function mapTasksDeep(tasks: readonly Task[], id: number, update: (task: Task) => Task): Task[] {
 	return tasks.map(task => {
-		const next = task.id === updated.id ? {
-			...task, ...updated,
-			position: task.position ?? updated.position, bucket_id: task.bucket_id ?? updated.bucket_id,
-			assignees: updated.assignees ?? task.assignees,
-			labels: updated.labels ?? task.labels,
-			attachments: updated.attachments ?? task.attachments,
-			related_tasks: updated.related_tasks ?? task.related_tasks,
-			reactions: updated.reactions ?? task.reactions,
-			created_by: updated.created_by ?? task.created_by,
-		} : task
+		const next = task.id === id ? update(task) : task
 		if (!next.related_tasks) return next
-		return {...next, related_tasks: Object.fromEntries(Object.entries(next.related_tasks).map(([kind, children]) => [kind, replaceTask(children ?? [], updated)]))}
+		return {...next, related_tasks: Object.fromEntries(Object.entries(next.related_tasks).map(([kind, children]) => [kind, mapTasksDeep(children ?? [], id, update)]))}
 	})
+}
+
+export function replaceTask(tasks: readonly Task[], updated: Task): Task[] {
+	if (updated.id === undefined) return [...tasks]
+	return mapTasksDeep(tasks, updated.id, task => mergeTask(task, updated))
 }
 
 export function removeTask(tasks: readonly Task[], id: number): Task[] {
