@@ -530,7 +530,7 @@ function handleTaskContainerScroll(id: number, el: HTMLElement) {
 	}
 
 	if (bucketPageMutation.isPending.value || !board.data.value?.hasMore[id!]) return
-	bucketPageMutation.mutate({project: projectId.value, view: props.viewId, params: params.value, bucket: id!, page: (board.data.value.pages[id!] ?? 1) + 1})
+	bucketPageMutation.mutate({project: projectId.value, view: props.viewId, params: {...params.value}, bucket: id!, page: (board.data.value.pages[id!] ?? 1) + 1})
 }
 
 function updateTasks(bucketId: number, tasks: IBucket['tasks']) {
@@ -539,6 +539,8 @@ function updateTasks(bucketId: number, tasks: IBucket['tasks']) {
 }
 
 async function updateTaskPosition(e) {
+	const project = projectId.value
+	const view = props.viewId
 	drag.value = false
 	try {
 		const {moved} = await handleTaskDropToProject(e, () => {})
@@ -550,10 +552,10 @@ async function updateTaskPosition(e) {
 		const before = bucket.tasks![index - 1]
 		const after = bucket.tasks![index + 1]
 		if (bucket.id !== sourceBucket.value) {
-			const result = await moveMutation.mutateAsync({project: projectId.value, view: props.viewId, bucket: bucket.id!, task})
+			const result = await moveMutation.mutateAsync({project, view, bucket: bucket.id!, task})
 			if (result.bucket_id !== undefined && result.bucket_id !== bucket.id) return
 		}
-		await positionMutation.mutateAsync({taskId: task.id!, project_view_id: props.viewId, position: calculateItemPosition(before?.position ?? null, after?.position ?? null)})
+		await positionMutation.mutateAsync({taskId: task.id!, project_view_id: view, position: calculateItemPosition(before?.position ?? null, after?.position ?? null)})
 	} catch { return } finally {
 		board.endDrag()
 		oneTaskUpdating.value = false
