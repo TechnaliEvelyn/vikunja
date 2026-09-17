@@ -76,8 +76,8 @@ export function moveTaskToBucket(buckets: Bucket[], task: Task, bucketId: number
 	if (!source || source.id === bucketId || !buckets.some(bucket => bucket.id === bucketId)) return buckets
 	const original = source.tasks?.find(item => item.id === task.id)
 	return buckets.map(bucket => {
-		if (bucket.id === source.id) return {...bucket, count: Math.max(0, (bucket.count ?? 0) - 1), tasks: removeTask(bucket.tasks ?? [], task.id!)}
-		if (bucket.id === bucketId) return {...bucket, count: (bucket.count ?? 0) + 1, tasks: [{...original, ...task, bucket_id: bucketId}, ...(bucket.tasks ?? [])]}
+		if (bucket.id === source.id) return {...bucket, count: Math.max(0, (bucket.count ?? 0) - 1), tasks: (bucket.tasks ?? []).filter(item => item.id !== task.id)}
+		if (bucket.id === bucketId) return {...bucket, count: (bucket.count ?? 0) + 1, tasks: [{...(original ? mergeTask(original, task) : task), bucket_id: bucketId}, ...(bucket.tasks ?? [])]}
 		return bucket
 	})
 }
