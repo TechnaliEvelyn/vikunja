@@ -7,19 +7,13 @@ import {createRouter, createMemoryHistory, RouterView, type Router} from 'vue-ro
 import type {Task as ITask} from '@/client/generated'
 import {createTaskDraft} from '@/helpers/task'
 
-const getAll = vi.fn<(...args: unknown[]) => Promise<ITask[]>>(async () => [])
-vi.mock('@/services/taskCollection', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('@/services/taskCollection')>()
-	return {
-		...actual,
-		default: class {
-			loading = false
-			totalPages = 1
-			getAll = getAll
-		},
-	}
-})
-
+import {QueryClient, VueQueryPlugin} from '@tanstack/vue-query'
+const getAll = vi.fn(async (..._args: unknown[]) => [] as ITask[])
+vi.mock('@/client/generated', () => ({
+ projectViewTasksList: async ({path, query}: {path: {project: number, view: number}, query: {q?: string, page: number}}) => ({data: {items: await getAll({projectId: path.project, viewId: path.view}, {...query, s: query.q}, query.page), page: query.page, total_pages: 5}}),
+}))
+const queryClient = new QueryClient({defaultOptions: {queries: {retry: false}}})
+beforeEach(() => queryClient.clear())
 import {useTaskList, buildStoredQuery} from './useTaskList'
 import {useViewFiltersStore} from '@/stores/viewFilters'
 
@@ -57,8 +51,6 @@ describe('buildStoredQuery', () => {
 	})
 })
 
-// The second positional argument passed to TaskCollectionService.getAll carries
-// the sort_by/order_by the backend uses to decide whether to rank by relevance.
 function lastRequestParams(): Record<string, unknown> {
 	return getAll.mock.calls.at(-1)?.[1] as Record<string, unknown>
 }
@@ -78,7 +70,7 @@ async function mountTaskList(query: Record<string, string>): Promise<Router> {
 		},
 	})
 
-	mount(TestComponent, {global: {plugins: [router]}})
+	mount(TestComponent, {global: {plugins: [router, [VueQueryPlugin, {queryClient}]]}})
 	await flushPromises()
 	await nextTick()
 	return router
@@ -170,7 +162,7 @@ async function mountRoutedTaskList() {
 		}],
 	})
 	await router.push('/projects/1/11')
-	mount(defineComponent({render: () => h(RouterView)}), {global: {plugins: [router]}})
+	mount(defineComponent({render: () => h(RouterView)}), {global: {plugins: [router, [VueQueryPlugin, {queryClient}]]}})
 	await flushPromises()
 	return {router, taskList: taskList!}
 }
@@ -235,12 +227,12 @@ describe('useTaskList navigation and pagination', () => {
 		await flushPromises()
 		expect(taskList.tasks.value).toEqual([])
 
-		const currentTasks = [createTaskDraft({id: 2, projectId: 2, title: 'Current project task'})]
+		const currentTasks = [createTaskDraft({id: 2, project_id: 2, title: 'Current project task'})]
 		resolveCurrent(currentTasks)
 		await flushPromises()
 		expect(taskList.tasks.value).toEqual(currentTasks)
 
-		resolveOld([createTaskDraft({id: 1, projectId: 1, title: 'Previous project task'})])
+		resolveOld([createTaskDraft({id: 1, project_id: 1, title: 'Previous project task'})])
 		await previousLoad
 		expect(taskList.tasks.value).toEqual(currentTasks)
 	})
