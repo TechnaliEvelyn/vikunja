@@ -41,6 +41,15 @@ describe('task domain helpers', () => {
 		expect(getDefaultBucketId({default_bucket_id: 2}, buckets)).toBe(2)
 		expect(getDefaultBucketId({}, buckets)).toBe(1)
 	})
+	it('keeps cached view data and sibling relations when moving a task to another bucket', () => {
+		const buckets: Bucket[] = [
+			{id: 1, count: 2, tasks: [{id: 4, bucket_id: 1, position: 8, labels: [{id: 7}]}, {id: 5, related_tasks: {subtask: [{id: 4, title: 'child'}]}}]},
+			{id: 2, count: 0, tasks: []},
+		]
+		const moved = moveTaskToBucket(buckets, {id: 4, position: 0, labels: null}, 2)
+		expect(moved[1].tasks).toEqual([{id: 4, bucket_id: 2, position: 8, labels: [{id: 7}]}])
+		expect(moved[0].tasks).toEqual([{id: 5, related_tasks: {subtask: [{id: 4, title: 'child'}]}}])
+	})
 	it('builds relative default reminders only for tasks with a due date', () => {
 		const defaults = [{relative_period: -900, relative_to: 'start_date'}]
 		expect(buildDefaultRemindersForQuickAdd(defaults, '')).toEqual([])
