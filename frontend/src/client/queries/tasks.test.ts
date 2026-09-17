@@ -1,6 +1,6 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {QueryClient} from '@tanstack/vue-query'
-import {taskQuery, tasksQuery} from './tasks'
+import {taskQuery, tasksQuery, allTasksQuery} from './tasks'
 import {kanbanQuery} from './kanban'
 const sdk = vi.hoisted(() => ({tasksRead: vi.fn(), tasksList: vi.fn(), projectTasksList: vi.fn(), projectViewTasksList: vi.fn(), projectViewBucketsTasksList: vi.fn()}))
 vi.mock('@/client/generated', () => sdk)
@@ -24,7 +24,8 @@ describe('task queries', () => {
 		expect(data.pages[0].items).toEqual([{id: 1}])
 		const call = project === null ? sdk.tasksList : sdk.projectTasksList
 		expect(call).toHaveBeenCalledWith(expect.objectContaining({query: {q: 'hello', page: 1}}))
-		expect(options.getNextPageParam!(data.pages[0], data.pages, 1, [1])).toBe(2)
+		await client.fetchInfiniteQuery({...options, pages: 2})
+		expect(call).toHaveBeenLastCalledWith(expect.objectContaining({query: {q: 'hello', page: 2}}))
 	})
 	it('keeps separate cache data when filters or views change', async () => {
 		sdk.projectViewTasksList.mockImplementation(({query}) => Promise.resolve({data: {items: [{title: query.filter}], total_pages: 1}}))
@@ -42,4 +43,10 @@ describe('task queries', () => {
 		expect(board.hasMore).toEqual({4: true, 5: false})
 		expect(sdk.projectViewBucketsTasksList).toHaveBeenCalledWith(expect.objectContaining({path: {project: -1, view: 2}}))
 	})
+})
+
+it('exhausts all pages for a Gantt scope', async () => {
+	sdk.projectViewTasksList.mockImplementation(({query}) => ({data: {items: [{id: query.page}], total_pages: 3}}))
+	const tasks = await new QueryClient().fetchQuery(allTasksQuery({project: 1, view: 2}))
+	expect(tasks.map(task => task.id)).toEqual([1, 2, 3])
 })

@@ -1,6 +1,7 @@
 import {infiniteQueryOptions, queryOptions} from '@tanstack/vue-query'
 import {projectTasksList, projectViewTasksList, tasksList, tasksRead} from '@/client/generated'
 import type {TasksListData, TasksReadData} from '@/client/generated'
+import {fetchAllPages} from './fetchAllPages'
 import {queryClient} from '@/client/queryClient'
 
 export type TaskFilterParams = Omit<NonNullable<TasksListData['query']>, 'format' | 'page'>
@@ -16,7 +17,9 @@ export const taskKeys = {
 	details: ['tasks', 'detail'] as const,
 	detail: (id: number, expand: TaskExpansion = []) => [...taskKeys.details, id, expand] as const,
 	lists: ['tasks', 'list'] as const,
-	list: ({project = null, view = 0, params = {}}: TaskScope) => [...taskKeys.lists, project, view, params] as const,
+	allLists: ['tasks', 'all'] as const,
+	allList: ({project = null, view = 0, params = {}}: TaskScope) => [...taskKeys.allLists, project, view, params] as const,
+	list: ({project = null, view = 0, params = {}}: TaskScope, initialPage = 1) => [...taskKeys.lists, project, view, params, initialPage] as const,
 }
 
 export function taskQuery(id: number, expand: TaskExpansion = []) {
@@ -29,7 +32,7 @@ export function taskQuery(id: number, expand: TaskExpansion = []) {
 export function tasksQuery(scope: TaskScope = {}, initialPage = 1) {
 	const {project = null, view = 0, params = {}} = scope
 	return infiniteQueryOptions({
-		queryKey: taskKeys.list(scope),
+		queryKey: taskKeys.list(scope, initialPage),
 		initialPageParam: initialPage,
 		queryFn: async ({pageParam, signal}) => {
 			const query = {...params, page: pageParam}
@@ -44,4 +47,16 @@ export function tasksQuery(scope: TaskScope = {}, initialPage = 1) {
 
 export function ensureTask(id: number, expand: TaskExpansion = []) {
 	return queryClient.ensureQueryData(taskQuery(id, expand))
+}
+
+export function allTasksQuery(scope: TaskScope) {
+	return queryOptions({
+		queryKey: taskKeys.allList(scope),
+		queryFn: ({signal}) => fetchAllPages(async page => {
+			const query = {...scope.params, page}
+			if (scope.project === undefined || scope.project === null) return (await tasksList({query, signal})).data
+			if (scope.view) return (await projectViewTasksList({path: {project: scope.project, view: scope.view}, query, signal})).data
+			return (await projectTasksList({path: {project: scope.project}, query, signal})).data
+		}),
+	})
 }
