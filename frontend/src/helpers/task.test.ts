@@ -53,3 +53,8 @@ describe('task domain helpers', () => {
 		expect(result.parsedLabels).toEqual(['label'])
 	})
 })
+
+it('retains embedded resources omitted from a task write response', () => {
+ const task = {id: 1, labels: [{id: 2}], related_tasks: {subtask: [{id: 3}]}, assignees: [{id: 4}]}
+ expect(replaceTask([task], {id: 1, title: 'new', labels: null, assignees: null})[0]).toMatchObject({...task, title: 'new'})
+})

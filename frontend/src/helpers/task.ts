@@ -3,14 +3,14 @@ import type {IRepeatAfter} from '@/types/IRepeatAfter'
 import {secondsToPeriod, periodToSeconds} from '@/helpers/time/period'
 import {cleanupItemText, parseTaskText, PREFIXES, type PrefixMode} from '@/modules/quickAddMagic'
 
-export function createTaskDraft(data: Partial<Task> = {}): Task {
+export function createTaskDraft(data: Partial<Task> = {}) {
 	return {
-		id: 0, description: '', done: false, priority: 0,
-		labels: [], assignees: [], reminders: [], attachments: [], buckets: [],
-		related_tasks: {}, reactions: {}, comments: [], project_id: 0, bucket_id: 0,
-		repeat_after: 0, repeat_mode: 0, percent_done: 0, hex_color: '',
-		is_favorite: false, cover_image_attachment_id: 0,
 		...data,
+		id: data.id ?? 0, description: data.description ?? '', done: data.done ?? false, priority: data.priority ?? 0,
+		labels: data.labels ?? [], assignees: data.assignees ?? [], reminders: data.reminders ?? [], attachments: data.attachments ?? [], buckets: data.buckets ?? [],
+		related_tasks: data.related_tasks ?? {}, reactions: data.reactions ?? {}, comments: data.comments ?? [], project_id: data.project_id ?? 0, bucket_id: data.bucket_id ?? 0,
+		repeat_after: data.repeat_after ?? 0, repeat_mode: data.repeat_mode ?? 0, percent_done: data.percent_done ?? 0, hex_color: data.hex_color ?? '',
+		is_favorite: data.is_favorite ?? false, cover_image_attachment_id: data.cover_image_attachment_id ?? 0,
 		title: (data.title ?? '').trim(),
 	}
 }
@@ -36,7 +36,16 @@ export function repeatAfterToSeconds(repeat?: number | IRepeatAfter | null): num
 
 export function replaceTask(tasks: readonly Task[], updated: Task): Task[] {
 	return tasks.map(task => {
-		const next = task.id === updated.id ? {...task, ...updated, position: task.position ?? updated.position, bucket_id: task.bucket_id ?? updated.bucket_id} : task
+		const next = task.id === updated.id ? {
+			...task, ...updated,
+			position: task.position ?? updated.position, bucket_id: task.bucket_id ?? updated.bucket_id,
+			assignees: updated.assignees ?? task.assignees,
+			labels: updated.labels ?? task.labels,
+			attachments: updated.attachments ?? task.attachments,
+			related_tasks: updated.related_tasks ?? task.related_tasks,
+			reactions: updated.reactions ?? task.reactions,
+			created_by: updated.created_by ?? task.created_by,
+		} : task
 		if (!next.related_tasks) return next
 		return {...next, related_tasks: Object.fromEntries(Object.entries(next.related_tasks).map(([kind, children]) => [kind, replaceTask(children ?? [], updated)]))}
 	})
