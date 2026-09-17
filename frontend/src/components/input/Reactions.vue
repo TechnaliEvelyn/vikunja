@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import type {IReactionPerEntity, ReactionKind} from '@/modelTypes/IReaction'
+import type {ReactionKind} from '@/modelTypes/IReaction'
 import {VuemojiPicker} from 'vuemoji-picker'
 import ReactionService from '@/services/reactions'
 import ReactionModel from '@/models/reaction'
 import BaseButton from '@/components/base/BaseButton.vue'
-import type {IUser} from '@/modelTypes/IUser'
+import type {User} from '@/client/generated'
+type ReactionUsers = Record<string, Pick<User, 'id' | 'name' | 'username' | 'bot_owner_id'>[] | null>
 import {getDisplayName} from '@/models/user'
 import {useI18n} from 'vue-i18n'
 import {nextTick, onBeforeUnmount, onMounted, ref} from 'vue'
@@ -21,7 +22,7 @@ const props = withDefaults(defineProps<{
 	disabled: false,
 })
 
-const model = defineModel<IReactionPerEntity>()
+const model = defineModel<ReactionUsers>()
 
 const authStore = useAuthStore()
 const {t} = useI18n()
@@ -44,7 +45,7 @@ async function addReaction(value: string) {
 	if (!authStore.info || !model.value) return
 
 	const modelValue = model.value
-	if (typeof modelValue[reaction.value] === 'undefined') {
+	if (!modelValue[reaction.value]) {
 		modelValue[reaction.value] = [authStore.info]
 	} else {
 		modelValue[reaction.value]!.push(authStore.info)
@@ -72,8 +73,8 @@ async function removeReaction(value: string) {
 	}
 }
 
-function getReactionTooltip(users: IUser[], value: string | number) {
-	const names = users.map(u => getDisplayName(u))
+function getReactionTooltip(users: ReactionUsers[string], value: string | number) {
+	const names = (users ?? []).map(u => getDisplayName(u))
 	const valueStr = String(value)
 
 	if (names.length === 1) {
@@ -149,7 +150,7 @@ async function toggleReaction(value: string | number) {
 		class="reactions"
 	>
 		<BaseButton
-			v-for="(users, value) in (model as IReactionPerEntity)"
+			v-for="(users, value) in model"
 			:key="'button' + value"
 			v-tooltip="getReactionTooltip(users, value)"
 			class="reaction-button"
@@ -157,7 +158,7 @@ async function toggleReaction(value: string | number) {
 			:disabled
 			@click="toggleReaction(value)"
 		>
-			{{ value }} {{ users.length }}
+			{{ value }} {{ users?.length }}
 		</BaseButton>
 		<BaseButton
 			v-if="!disabled"

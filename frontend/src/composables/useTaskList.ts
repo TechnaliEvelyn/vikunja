@@ -1,15 +1,10 @@
-import {ref, shallowRef, shallowReactive, watch, computed, type ComputedGetter} from 'vue'
+import {ref, shallowRef, watch, computed, type ComputedGetter} from 'vue'
 import {useRouter, isNavigationFailure} from 'vue-router'
 import type {LocationQueryRaw} from 'vue-router'
 import {useRouteQuery} from '@vueuse/router'
 
-import TaskCollectionService, {
-	type ExpandTaskFilterParam,
-	getDefaultTaskFilterParams,
-	type TaskFilterParams,
-} from '@/services/taskCollection'
-import type {Task as ITask} from '@/client/generated'
-import {error} from '@/message'
+import {useInfiniteQuery} from '@tanstack/vue-query'
+import {tasksQuery, getDefaultTaskFilterParams, type TaskExpansion, type TaskFilterParams, type TaskScope} from '@/client/queries/tasks'
 import {useAuthStore} from '@/stores/auth'
 import {useViewFiltersStore} from '@/stores/viewFilters'
 
@@ -105,7 +100,7 @@ export function useTaskList(
 	projectIdGetter: ComputedGetter<number>,
 	projectViewIdGetter: ComputedGetter<number>,
 	sortByDefault: SortBy = SORT_BY_DEFAULT,
-	expandGetter: ComputedGetter<ExpandTaskFilterParam> = () => 'subtasks',
+	expandGetter: ComputedGetter<TaskExpansion> = () => ['subtasks'],
 ) {
 	
 	const projectId = computed(() => projectIdGetter())
@@ -120,11 +115,11 @@ export function useTaskList(
 	const filter = useRouteQuery('filter')
 	const s = useRouteQuery('s')
 
-	watch(filter, v => { params.value.filter = v ?? '' }, { immediate: true })
-	watch(s, v => { params.value.s = v ?? '' }, { immediate: true })
+	watch(filter, v => { params.value.filter = String(v ?? '') }, { immediate: true })
+	watch(s, v => { params.value.q = String(v ?? '') }, { immediate: true })
 
 	watch(() => params.value.filter, v => { filter.value = v || undefined })
-	watch(() => params.value.s, v => { s.value = v || undefined })
+	watch(() => params.value.q, v => { s.value = v || undefined })
 
 	const sortQuery = useRouteQuery('sort')
 
@@ -190,7 +185,7 @@ export function useTaskList(
 
 		// Relevance ranking only engages when no sort is sent, so omit the default
 		// sort while searching and let an explicit user sort still take precedence.
-		if (loadParams.s && !sortQuery.value) {
+		if (loadParams.q && !sortQuery.value) {
 			loadParams.sort_by = []
 			loadParams.order_by = []
 			return loadParams
@@ -212,52 +207,20 @@ export function useTaskList(
 	
 	const authStore = useAuthStore()
 	
-	const getAllTasksParams = computed(() => {
-		return [
-			{
-				projectId: projectId.value,
-				viewId: projectViewId.value,
-			},
-			{
-				...allParams.value,
-				filter_timezone: authStore.settings.timezone,
-				expand: expandGetter(),
-			},
-			page.value,
-		]
-	})
+	const scope = computed(() => ({project: projectId.value, view: projectViewId.value, params: {...allParams.value, filter_timezone: authStore.settings.timezone, expand: expandGetter()}}))
+	const request = shallowRef<{scope: TaskScope, page: number}>()
+	watch([scope, page, pendingQueryRestore], () => {
+		if (!pendingQueryRestore.value) request.value = {scope: scope.value, page: page.value}
+	}, {immediate: true, flush: 'post'})
+	const query = useInfiniteQuery(computed(() => ({...tasksQuery(request.value?.scope ?? {}, request.value?.page ?? 1), enabled: !!request.value && !pendingQueryRestore.value && request.value.page === page.value && JSON.stringify(request.value.scope) === JSON.stringify(scope.value)})))
+	const loading = query.isFetching
+	const totalPages = computed(() => query.data.value?.pages[0]?.total_pages ?? 0)
+	const tasks = computed(() => query.data.value?.pages.flatMap(result => result.items ?? []) ?? [])
 
-	const taskCollectionService = shallowReactive(new TaskCollectionService())
-	const loading = computed(() => taskCollectionService.loading)
-	const totalPages = computed(() => taskCollectionService.totalPages)
-
-	const tasks = ref<ITask[]>([])
-	let requestId = 0
-	async function loadTasks(resetBeforeLoad: boolean = true) {
-		const request = ++requestId
-		if(resetBeforeLoad) {
-			tasks.value = []
-		}
-		try {
-			const loadedTasks = await taskCollectionService.getAll(...getAllTasksParams.value)
-			if (request === requestId) {
-				tasks.value = loadedTasks
-			}
-		} catch (e) {
-			error(e)
-		}
+	async function loadTasks() {
+		await query.refetch()
 		return tasks.value
 	}
-
-	watch(() => pendingQueryRestore.value ? null : JSON.stringify(getAllTasksParams.value), newParams => {
-		if (newParams === null) {
-			requestId++
-			tasks.value = []
-			return
-		}
-
-		loadTasks()
-	}, {immediate: true, flush: 'post'})
 
 	return {
 		tasks,

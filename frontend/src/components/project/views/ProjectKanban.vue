@@ -66,7 +66,7 @@
 									</h2>
 									<span
 										v-if="bucket.limit > 0 || alwaysShowBucketTaskCount"
-										:class="{'is-max': bucket.limit > 0 && bucket.count >= bucket.limit}"
+										:class="{'is-max': bucket.limit > 0 && (bucket.count ?? 0) >= bucket.limit}"
 										class="limit"
 									>
 										{{ bucket.limit > 0 ? `${bucket.count}/${bucket.limit}` : bucket.count }}
@@ -153,7 +153,7 @@
 									v-bind="DRAG_OPTIONS"
 									:handle="taskDragHandle"
 									:delay="isTouchDevice ? 300 : 1000"
-									:model-value="bucket.tasks"
+									:model-value="bucket.tasks ?? []"
 									:group="{name: 'tasks', put: shouldAcceptDrop(bucket) && !dragBucket}"
 									:disabled="!canWrite"
 									:data-bucket-index="bucketIndex"
@@ -199,16 +199,16 @@
 											</div>
 											<XButton
 												v-else
-												v-tooltip="bucket.limit > 0 && bucket.count >= bucket.limit ? $t('project.kanban.bucketLimitReached') : ''"
+												v-tooltip="bucket.limit > 0 && (bucket.count ?? 0) >= bucket.limit ? $t('project.kanban.bucketLimitReached') : ''"
 												class="is-fullwidth has-text-centered"
 												:shadow="false"
 												icon="plus"
 												variant="secondary"
-												:disabled="bucket.limit > 0 && bucket.count >= bucket.limit"
+												:disabled="bucket.limit > 0 && (bucket.count ?? 0) >= bucket.limit"
 												@click="toggleShowNewTaskInput(bucket.id)"
 											>
 												{{
-													bucket.tasks.length === 0 ? $t('project.kanban.addTask') : $t('project.kanban.addAnotherTask')
+													(bucket.tasks?.length ?? 0) === 0 ? $t('project.kanban.addTask') : $t('project.kanban.addAnotherTask')
 												}}
 											</XButton>
 										</li>
@@ -292,22 +292,22 @@
 </template>
 
 <script setup lang="ts">
+import {useKanban} from '@/composables/useKanban'
+import {useUpdateTaskPositionMutation, useMoveTaskMutation} from '@/client/queries/taskMutations'
+import {useCreateBucketMutation, useDeleteBucketMutation, useUpdateBucketMutation, useLoadBucketPageMutation} from '@/client/queries/kanbanMutations'
 import {computed, nextTick, ref, watch, toRef} from 'vue'
 import {useQuery} from '@tanstack/vue-query'
 import {useRouter} from 'vue-router'
 import {useRouteQuery} from '@vueuse/router'
 import {useI18n} from 'vue-i18n'
 import draggable from 'zhyswan-vuedraggable'
-import {klona} from 'klona/lite'
 
 import {PERMISSIONS as Permissions} from '@/constants/permissions'
-import BucketModel from '@/models/bucket'
 
 import type {Bucket as IBucket} from '@/client/generated'
 import type {Task as ITask} from '@/client/generated'
 
-import {useTaskStore} from '@/stores/tasks'
-import {useKanbanStore} from '@/stores/kanban'
+import {useTaskActions} from '@/composables/useTaskActions'
 import {useAuthStore} from '@/stores/auth'
 
 import ProjectWrapper from '@/components/project/ProjectWrapper.vue'
@@ -328,14 +328,10 @@ import {savedFilterQuery} from '@/client/queries/savedFilters'
 import {useCurrentProject} from '@/composables/useCurrentProject'
 import {useTaskDragToProject} from '@/composables/useTaskDragToProject'
 import {success} from '@/message'
-import type {TaskFilterParams} from '@/services/taskCollection'
+import type {TaskFilterParams} from '@/client/queries/tasks'
 import type {ProjectView} from '@/client/generated'
-import TaskPositionService from '@/services/taskPosition'
-import TaskPositionModel from '@/models/taskPosition'
 import {i18n} from '@/i18n'
 import {createProjectViewUpdate, useUpdateProjectViewMutation} from '@/client/queries/projectViews'
-import TaskBucketService from '@/services/taskBucket'
-import TaskBucketModel from '@/models/taskBucket'
 
 const props = defineProps<{
 	isLoadingProject: boolean,
@@ -361,18 +357,17 @@ const isCurrentProject = ({projectId: id}: {projectId: number}) => projectId.val
 const updateDefaultBucket = useUpdateProjectViewMutation(t('project.kanban.defaultBucketSavedSuccess'), isCurrentProject)
 const updateDoneBucket = useUpdateProjectViewMutation(t('project.kanban.doneBucketSavedSuccess'), isCurrentProject)
 
-const kanbanStore = useKanbanStore()
-const taskStore = useTaskStore()
+const taskStore = useTaskActions()
 const authStore = useAuthStore()
 
 const alwaysShowBucketTaskCount = computed(() => authStore.settings.frontendSettings.alwaysShowBucketTaskCount)
 const {handleTaskDropToProject} = useTaskDragToProject()
-const taskPositionService = ref(new TaskPositionService())
-const taskBucketService = ref(new TaskBucketService())
+const positionMutation = useUpdateTaskPositionMutation()
+const moveMutation = useMoveTaskMutation()
 
 const savedFilter = useQuery(computed(() => savedFilterQuery(getSavedFilterIdFromProjectId(projectId.value)))).data
 
-const taskContainerRefs = ref<{ [id: IBucket['id']]: HTMLElement }>({})
+const taskContainerRefs = ref<{ [id: number]: HTMLElement }>({})
 const bucketLimitInputRef = ref<HTMLInputElement | null>(null)
 
 const drag = ref(false)
@@ -388,14 +383,14 @@ const showNewTaskInput = ref<IBucket['id'] | null>(null)
 
 const newBucketTitle = ref('')
 const showNewBucketInput = ref(false)
-const newTaskError = ref<{ [id: IBucket['id']]: boolean }>({})
+const newTaskError = ref<{ [id: number]: boolean }>({})
 const newTaskInputFocused = ref(false)
 
 const showSetLimitInput = ref(false)
 const collapsedBuckets = ref<CollapsedBuckets>({})
 
 // We're using this to show the loading animation only at the task when updating it
-const taskUpdating = ref<{ [id: ITask['id']]: boolean }>({})
+const taskUpdating = ref<{ [id: number]: boolean }>({})
 const oneTaskUpdating = ref(false)
 
 // URL-synchronized filter parameters
@@ -407,12 +402,12 @@ const params = ref<TaskFilterParams>({
 	order_by: [],
 	filter: '',
 	filter_include_nulls: false,
-	s: '',
+	q: '',
 })
 
 watch([filter, s], ([filterValue, sValue]) => {
-	params.value.filter = filterValue ?? ''
-	params.value.s = sValue ?? ''
+	params.value.filter = String(filterValue ?? '')
+	params.value.q = String(sValue ?? '')
 }, { immediate: true })
 
 function updateFilters(newParams: TaskFilterParams) {
@@ -421,13 +416,13 @@ function updateFilters(newParams: TaskFilterParams) {
 	
 	// Sync only filter and s to URL
 	filter.value = newParams.filter || undefined
-	s.value = newParams.s || undefined
+	s.value = newParams.q || undefined
 }
 
 const getTaskDraggableTaskComponentData = computed(() => (bucket: IBucket) => {
 	return {
-		ref: (el: HTMLElement) => setTaskContainerRef(bucket.id, el),
-		onScroll: (event: Event) => handleTaskContainerScroll(bucket.id, event.target as HTMLElement),
+		ref: (el: HTMLElement) => setTaskContainerRef(bucket.id ?? 0, el),
+		onScroll: (event: Event) => handleTaskContainerScroll(bucket.id ?? 0, event.target as HTMLElement),
 		type: 'transition-group',
 		name: !drag.value ? 'move-card' : null,
 		class: [
@@ -487,11 +482,18 @@ function onHandleTouchMove(e: TouchEvent) {
 	}
 }
 
-const buckets = computed(() => kanbanStore.buckets)
-const loading = computed(() => kanbanStore.isLoading)
+const board = useKanban(projectId, () => props.viewId, params)
+const buckets = board.buckets
+const createBucketMutation = useCreateBucketMutation()
+const deleteBucketMutation = useDeleteBucketMutation()
+const updateBucketMutation = useUpdateBucketMutation()
+const bucketPageMutation = useLoadBucketPageMutation()
+const getBucketById = (id: number) => buckets.value.find(bucket => bucket.id === id)
+const updateBucket = (bucket: IBucket) => updateBucketMutation.mutateAsync({project: projectId.value, view: props.viewId, bucket: {...getBucketById(bucket.id!), ...bucket}})
+const loading = board.isFetching
 const projectIdWithFallback = computed<number>(() => project.value?.id || projectId.value)
 
-const taskLoading = computed(() => taskStore.isLoading || taskPositionService.value.loading)
+const taskLoading = computed(() => taskStore.isLoading || positionMutation.isPending.value)
 
 watch(
 	() => ({
@@ -499,12 +501,12 @@ watch(
 		projectId: projectId.value,
 		viewId: props.viewId,
 	}),
-	({params, projectId, viewId}) => {
+	({projectId}) => {
 		if (projectId === undefined || Number(projectId) === 0) {
 			return
 		}
 		collapsedBuckets.value = getCollapsedBucketState(projectId)
-		kanbanStore.loadBucketsForProject(projectId, viewId, params)
+		board.refetch()
 	},
 	{
 		immediate: true,
@@ -512,12 +514,12 @@ watch(
 	},
 )
 
-function setTaskContainerRef(id: IBucket['id'], el: HTMLElement) {
+function setTaskContainerRef(id: number, el: HTMLElement) {
 	if (!el) return
 	taskContainerRefs.value[id] = el
 }
 
-function handleTaskContainerScroll(id: IBucket['id'], el: HTMLElement) {
+function handleTaskContainerScroll(id: number, el: HTMLElement) {
 	if (!el) {
 		return
 	}
@@ -527,135 +529,38 @@ function handleTaskContainerScroll(id: IBucket['id'], el: HTMLElement) {
 		return
 	}
 
-	kanbanStore.loadNextTasksForBucket(
-		projectId.value,
-		props.viewId,
-		params.value,
-		id,
-	)
+	if (bucketPageMutation.isPending.value || !board.data.value?.hasMore[id!]) return
+	bucketPageMutation.mutate({project: projectId.value, view: props.viewId, params: params.value, bucket: id!, page: (board.data.value.pages[id!] ?? 1) + 1})
 }
 
-function updateTasks(bucketId: IBucket['id'], tasks: IBucket['tasks']) {
-	const bucket = kanbanStore.getBucketById(bucketId)
-
-	if (bucket === undefined) {
-		return
-	}
-
-	kanbanStore.setBucketById({
-		...bucket,
-		tasks,
-	})
+function updateTasks(bucketId: number, tasks: IBucket['tasks']) {
+	if (!board.dragBuckets.value) board.startDrag()
+	board.dragBuckets.value = board.dragBuckets.value!.map(bucket => bucket.id === bucketId ? {...bucket, tasks} : bucket)
 }
 
 async function updateTaskPosition(e) {
 	drag.value = false
-
-	// Check if dropped on a sidebar project
-	const {moved} = await handleTaskDropToProject(e, (task) => {
-		kanbanStore.removeTaskInBucket(task)
-	})
-
-	if (moved) {
-		return
-	}
-
-	// If dropped outside kanban
-	if (!e.to.dataset.bucketIndex) {
-		return
-	}
-
-	// While we could just pass the bucket index in through the function call, this would not give us the
-	// new bucket id when a task has been moved between buckets, only the new bucket. Using the data-bucket-id
-	// of the drop target works all the time.
-	const bucketIndex = parseInt(e.to.dataset.bucketIndex)
-
-	const newBucket = buckets.value[bucketIndex]
-
-	// e.newIndex is a DOM index: it counts the footer slot and elements still leaving the
-	// transition group, so it can point past the last task. The bucket is already updated here.
-	const movedTaskId = parseInt(e.item.dataset.taskId, 10)
-	const newTaskIndex = newBucket.tasks.findIndex(t => t.id === movedTaskId)
-
-	if (newTaskIndex === -1) {
-		return
-	}
-
-	const task = newBucket.tasks[newTaskIndex]
-	const oldBucket = buckets.value.find(b => b.id === sourceBucket.value)
-	const taskBefore = newBucket.tasks[newTaskIndex - 1] ?? null
-	const taskAfter = newBucket.tasks[newTaskIndex + 1] ?? null
-	taskUpdating.value[task.id] = true
-
-	const newTask = klona(task) // cloning the task to avoid pinia store manipulation
-	newTask.bucket_id = newBucket.id
-	const position = calculateItemPosition(
-		taskBefore !== null ? taskBefore.position : null,
-		taskAfter !== null ? taskAfter.position : null,
-	)
-	
-	let bucketHasChanged = false
-	if (
-		oldBucket !== undefined && // This shouldn't actually be `undefined`, but let's play it safe.
-		newBucket.id !== oldBucket.id
-	) {
-		kanbanStore.setBucketById({
-			...oldBucket,
-			count: oldBucket.count - 1,
-		})
-		kanbanStore.setBucketById({
-			...newBucket,
-			count: newBucket.count + 1,
-		})
-		bucketHasChanged = true
-	}
-
 	try {
-		const newPosition = new TaskPositionModel({
-			position,
-			projectViewId: props.viewId,
-			taskId: newTask.id,
-		})
-		await taskPositionService.value.update(newPosition)
-		newTask.position = position
-		
-		if(bucketHasChanged) {
-			const updatedTaskBucket = await taskBucketService.value.update(new TaskBucketModel({
-				taskId: newTask.id,
-				bucketId: newTask.bucket_id,
-				projectViewId: props.viewId,
-				projectId: projectIdWithFallback.value,
-			}))
-			Object.assign(newTask, updatedTaskBucket.task)
-			if (updatedTaskBucket.bucket_id !== newTask.bucket_id) {
-				kanbanStore.moveTaskToBucket(newTask, updatedTaskBucket.bucket_id)
-			}
-			newTask.bucket_id = updatedTaskBucket.bucket_id
-			if (updatedTaskBucket.bucket) {
-				kanbanStore.setBucketById(updatedTaskBucket.bucket, false)
-			}
+		const {moved} = await handleTaskDropToProject(e, () => {})
+		if (moved) { await board.refetch(); return }
+		const bucket = buckets.value[Number(e.to.dataset.bucketIndex)]
+		const index = bucket?.tasks?.findIndex(task => task.id === Number(e.item.dataset.taskId)) ?? -1
+		if (!bucket || index < 0) return
+		const task = bucket.tasks![index]
+		const before = bucket.tasks![index - 1]
+		const after = bucket.tasks![index + 1]
+		if (bucket.id !== sourceBucket.value) {
+			const result = await moveMutation.mutateAsync({project: projectId.value, view: props.viewId, bucket: bucket.id!, task})
+			if (result.bucket_id !== undefined && result.bucket_id !== bucket.id) return
 		}
-		kanbanStore.setTaskInBucket(newTask)
-
-		// Make sure the first and second task don't both get position 0 assigned
-		if (newTaskIndex === 0 && taskAfter !== null && taskAfter.position === 0) {
-			const taskAfterAfter = newBucket.tasks[newTaskIndex + 2] ?? null
-			const newTaskAfter = klona(taskAfter) // cloning the task to avoid pinia store manipulation
-			newTaskAfter.bucket_id = newBucket.id
-			newTaskAfter.position = calculateItemPosition(
-				0,
-				taskAfterAfter !== null ? taskAfterAfter.position : null,
-			)
-
-			await taskStore.update(newTaskAfter)
-		}
-	} finally {
-		taskUpdating.value[task.id] = false
+		await positionMutation.mutateAsync({taskId: task.id!, project_view_id: props.viewId, position: calculateItemPosition(before?.position ?? null, after?.position ?? null)})
+	} catch { return } finally {
+		board.endDrag()
 		oneTaskUpdating.value = false
 	}
 }
 
-function toggleShowNewTaskInput(bucketId: IBucket['id']) {
+function toggleShowNewTaskInput(bucketId: number) {
 	if (loading.value || taskLoading.value) {
 		return
 	}
@@ -665,29 +570,29 @@ function toggleShowNewTaskInput(bucketId: IBucket['id']) {
 	newTaskInputFocused.value = false
 }
 
-async function addTaskToBucket(bucketId: IBucket['id']) {
+async function addTaskToBucket(bucketId: number) {
 	if (newTaskText.value === '') {
 		newTaskError.value[bucketId] = true
 		return
 	}
 	newTaskError.value[bucketId] = false
 
-	const task = await taskStore.createNewTask({
+	await taskStore.createNewTask({
 		title: newTaskText.value,
-		bucketId,
-		projectId: projectIdWithFallback.value,
+		bucket_id: bucketId,
+		project_id: projectIdWithFallback.value,
 	})
 	newTaskText.value = ''
-	kanbanStore.addTaskToBucket(task)
+	await board.refetch()
 	scrollTaskContainerToTop(bucketId)
 
-	const bucket = kanbanStore.getBucketById(bucketId)
-	if (bucket && bucket.limit && bucket.count >= bucket.limit) {
+	const bucket = getBucketById(bucketId)
+	if (bucket && bucket.limit && (bucket.count ?? 0) >= bucket.limit) {
 		toggleShowNewTaskInput(bucketId)
 	}
 }
 
-function scrollTaskContainerToTop(bucketId: IBucket['id']) {
+function scrollTaskContainerToTop(bucketId: number) {
 	const bucketEl = taskContainerRefs.value[bucketId]
 	if (!bucketEl) {
 		return
@@ -700,15 +605,11 @@ async function createNewBucket() {
 		return
 	}
 
-	await kanbanStore.createBucket(new BucketModel({
-		title: newBucketTitle.value,
-		projectId: projectIdWithFallback.value,
-		projectViewId: props.viewId,
-	}))
+	await createBucketMutation.mutateAsync({project: projectId.value, view: props.viewId, bucket: {title: newBucketTitle.value}})
 	newBucketTitle.value = ''
 }
 
-function deleteBucketModal(bucketId: IBucket['id']) {
+function deleteBucketModal(bucketId: number) {
 	if (buckets.value.length <= 1) {
 		return
 	}
@@ -719,14 +620,7 @@ function deleteBucketModal(bucketId: IBucket['id']) {
 
 async function deleteBucket() {
 	try {
-		await kanbanStore.deleteBucket({
-			bucket: new BucketModel({
-				id: bucketToDelete.value,
-				projectId: projectIdWithFallback.value,
-				projectViewId: props.viewId,
-			}),
-			params: params.value,
-		})
+		await deleteBucketMutation.mutateAsync({project: projectId.value, view: props.viewId, bucket: {id: bucketToDelete.value}})
 		success({message: t('project.kanban.deleteBucketSuccess')})
 	} finally {
 		showBucketDeleteModal.value = false
@@ -741,18 +635,17 @@ async function focusBucketTitle(e: Event) {
 	target.focus()
 }
 
-async function saveBucketTitle(bucketId: IBucket['id'], bucketTitle: string) {
+async function saveBucketTitle(bucketId: number, bucketTitle: string) {
 	
-	const bucket = kanbanStore.getBucketById(bucketId)
+	const bucket = getBucketById(bucketId)
 	if (bucket?.title === bucketTitle) {
 		bucketTitleEditable.value = false
 		return
 	}
 	
-	await kanbanStore.updateBucket({
+	await updateBucket({
 		id: bucketId,
 		title: bucketTitle,
-		projectId: projectId.value,
 	})
 	success({message: i18n.global.t('project.kanban.bucketTitleSavedSuccess')})
 	bucketTitleEditable.value = false
@@ -760,7 +653,7 @@ async function saveBucketTitle(bucketId: IBucket['id'], bucketTitle: string) {
 
 function updateBuckets(value: IBucket[]) {
 	// (1) buckets get updated in store and tasks positions get invalidated
-	kanbanStore.setBuckets(value)
+	board.dragBuckets.value = value
 }
 
 function handleRecurringTaskCompletion() {
@@ -776,12 +669,12 @@ function handleRecurringTaskCompletion() {
 		
 	if (filterContainsDateFields) {
 		// Reload the kanban board to refresh tasks that now match/don't match the filter
-		kanbanStore.loadBucketsForProject(projectId.value, props.viewId, params.value)
+		board.refetch()
 	}
 }
 
 // TODO: fix type
-function updateBucketPosition(e: { item: HTMLElement }) {
+async function updateBucketPosition(e: { item: HTMLElement }) {
 	// (2) bucket positon is changed
 	dragBucket.value = false
 
@@ -791,30 +684,31 @@ function updateBucketPosition(e: { item: HTMLElement }) {
 	const bucketIndex = buckets.value.findIndex(b => b.id === movedBucketId)
 
 	if (bucketIndex === -1) {
+		board.endDrag()
 		return
 	}
 
 	const bucketBefore = buckets.value[bucketIndex - 1] ?? null
 	const bucketAfter = buckets.value[bucketIndex + 1] ?? null
 
-	kanbanStore.updateBucket({
-		id: movedBucketId,
-		projectId: projectId.value,
-		position: calculateItemPosition(
-			bucketBefore !== null ? bucketBefore.position : null,
-			bucketAfter !== null ? bucketAfter.position : null,
-		),
-	})
+	try {
+		await updateBucket({
+			id: movedBucketId,
+			position: calculateItemPosition(
+				bucketBefore !== null ? bucketBefore.position : null,
+				bucketAfter !== null ? bucketAfter.position : null,
+			),
+		})
+	} catch { /* Mutation reports the error. */ } finally { board.endDrag() }
 }
 
-async function saveBucketLimit(bucketId: IBucket['id'], limit: number) {
+async function saveBucketLimit(bucketId: number, limit: number) {
 	if (limit < 0) {
 		return
 	}
 
-	await kanbanStore.updateBucket({
-		...kanbanStore.getBucketById(bucketId),
-		projectId: projectId.value,
+	await updateBucket({
+		...getBucketById(bucketId),
 		limit,
 	})
 	success({message: t('project.kanban.bucketLimitSavedSuccess')})
@@ -822,7 +716,7 @@ async function saveBucketLimit(bucketId: IBucket['id'], limit: number) {
 
 const setBucketLimitCancel = ref<number | null>(null)
 
-async function setBucketLimit(bucketId: IBucket['id'], now: boolean = false) {
+async function setBucketLimit(bucketId: number, now: boolean = false) {
 	const limit = parseInt(bucketLimitInputRef.value?.value || '')
 
 	if (setBucketLimitCancel.value !== null) {
@@ -843,22 +737,23 @@ function shouldAcceptDrop(bucket: IBucket) {
 		// If there is no limit set, dragging & dropping should always work
 		bucket.limit === 0 ||
 		// Disallow dropping to buckets which have their limit reached
-		bucket.count < bucket.limit
+		(bucket.count ?? 0) < (bucket.limit ?? 0)
 	)
 }
 
 function dragstart(bucket: IBucket) {
 	drag.value = true
-	sourceBucket.value = bucket.id
+	sourceBucket.value = bucket.id ?? 0
 }
 
 function handleTaskDragStart(e) {
 	const taskId = parseInt(e.item.dataset.taskId, 10)
 	const bucketIndex = parseInt(e.from.dataset.bucketIndex, 10)
 	const bucket = buckets.value[bucketIndex]
-	const task = bucket?.tasks.find(t => t.id === taskId)
+	const task = bucket?.tasks?.find(t => t.id === taskId)
 
 	if (task) {
+		board.startDrag()
 		taskStore.setDraggedTask(task)
 	}
 	dragstart(bucket)
@@ -897,16 +792,16 @@ function toggleDoneBucket(bucket: IBucket) {
 }
 
 function collapseBucket(bucket: IBucket) {
-	collapsedBuckets.value[bucket.id] = true
+	collapsedBuckets.value[bucket.id ?? 0] = true
 	saveCollapsedBucketState(projectIdWithFallback.value, collapsedBuckets.value)
 }
 
 function unCollapseBucket(bucket: IBucket) {
-	if (!collapsedBuckets.value[bucket.id]) {
+	if (!collapsedBuckets.value[bucket.id ?? 0]) {
 		return
 	}
 
-	collapsedBuckets.value[bucket.id] = false
+	collapsedBuckets.value[bucket.id ?? 0] = false
 	saveCollapsedBucketState(projectIdWithFallback.value, collapsedBuckets.value)
 }
 </script>

@@ -94,7 +94,7 @@
 import {computed, ref, onUnmounted, watch} from 'vue'
 import {useProjects} from '@/composables/useProjects'
 import {useCurrentProject} from '@/composables/useCurrentProject'
-import {useTaskStore} from '@/stores/tasks'
+import {useTaskActions} from '@/composables/useTaskActions'
 import {useStorage} from '@vueuse/core'
 
 import type {ProjectResponse} from '@/client/queries/projects'
@@ -119,7 +119,7 @@ const props = defineProps<{
 	canEditOrder?: boolean,
 }>()
 
-const taskStore = useTaskStore()
+const taskStore = useTaskActions()
 const isHoveredDuringDrag = ref(false)
 
 // Track mouse position during drag to detect hover (mouseenter doesn't fire during drag)

@@ -267,9 +267,9 @@ const previewTasks = computed(() => {
 		title: pt.title || t('migrate.csv.untitled'),
 		description: pt.description || '',
 		done: pt.done,
-		due_date: pt.due_date || null,
-		start_date: pt.start_date || null,
-		end_date: pt.end_date || null,
+		due_date: pt.due_date || undefined,
+		start_date: pt.start_date || undefined,
+		end_date: pt.end_date || undefined,
 		priority: pt.priority,
 		labels: (pt.labels || []).map((l, li) => ({id: -(li + 1), title: l})),
 	}))

@@ -33,7 +33,8 @@ import {computed, ref, watch, nextTick} from 'vue'
 
 import Filters from '@/components/project/partials/Filters.vue'
 
-import {type TaskFilterParams} from '@/services/taskCollection'
+import type {EditableTaskCollection} from '@/types/EditableTaskCollection'
+import {type TaskFilterParams} from '@/client/queries/tasks'
 import {useProjects} from '@/composables/useProjects'
 
 const props = defineProps<{
@@ -48,13 +49,13 @@ const emit = defineEmits<{
 
 const projectList = useProjects()
 
-const value = ref<TaskFilterParams>({})
+const value = ref<EditableTaskCollection>({sort_by: [], order_by: [], filter: '', filter_include_nulls: false, s: ''})
 const filtersRef = ref()
 
 watch(
 	() => props.modelValue,
 	(modelValue: TaskFilterParams) => {
-		value.value = modelValue
+		value.value = {sort_by: modelValue.sort_by ?? [], order_by: modelValue.order_by ?? [], filter: modelValue.filter ?? '', filter_include_nulls: modelValue.filter_include_nulls ?? false, s: modelValue.q ?? ''}
 	},
 	{
 		immediate: true,
@@ -80,9 +81,9 @@ watch(modalOpen, (isOpen) => {
 
 function showResults() {
 	emit('update:modelValue', {
-		...value.value,
+		...props.modelValue,
 		filter: value.value.filter,
-		s: value.value.s,
+		q: value.value.s,
 	})
 	modalOpen.value = false
 }

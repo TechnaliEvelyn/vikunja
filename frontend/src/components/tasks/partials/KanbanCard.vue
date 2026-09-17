@@ -38,7 +38,7 @@
 					</span>
 				</span>
 				<span
-					v-if="task.due_date > 0"
+					v-if="new Date(task.due_date ?? 0).getTime() > 0"
 					v-tooltip="formatDateLong(task.due_date)"
 					class="due-date"
 				>
@@ -72,33 +72,33 @@
 			</span>
 
 			<ProgressBar
-				v-if="task.percent_done > 0"
+				v-if="(task.percent_done ?? 0) > 0"
 				class="task-progress"
-				:value="task.percent_done * 100"
+				:value="(task.percent_done ?? 0) * 100"
 			/>
 			<div class="footer">
-				<Labels :labels="task.labels" />
+				<Labels :labels="task.labels ?? []" />
 				<PriorityLabel
-					:priority="task.priority"
+					:priority="task.priority ?? 0"
 					:done="task.done"
 					class="is-inline-flex is-align-items-center"
 				/>
 				<span
-					v-if="task.attachments.length > 0"
+					v-if="(task.attachments?.length ?? 0) > 0"
 					class="icon"
 					role="img"
-					:aria-label="$t('task.attributes.attachment', task.attachments.length)"
+					:aria-label="$t('task.attributes.attachment', (task.attachments?.length ?? 0))"
 				>
 					<Icon icon="paperclip" />
 				</span>
 				<span
-					v-if="!isEditorContentEmpty(task.description)"
+					v-if="!isEditorContentEmpty((task.description ?? ''))"
 					class="icon"
 				>
 					<Icon icon="align-left" />
 				</span>
 				<span
-					v-if="task.repeat_after.amount > 0"
+					v-if="(task.repeat_after ?? 0) > 0"
 					class="icon"
 				>
 					<Icon icon="history" />
@@ -108,8 +108,8 @@
 					class="project-task-icon"
 				/>
 				<AssigneeList
-					v-if="task.assignees.length > 0"
-					:assignees="task.assignees"
+					v-if="(task.assignees?.length ?? 0) > 0"
+					:assignees="task.assignees ?? []"
 					:avatar-size="24"
 				/>
 				<ChecklistSummary
@@ -142,7 +142,7 @@ import {fetchAttachmentBlobUrl} from '@/helpers/attachments'
 
 import {formatDateLong, formatDisplayDate, formatISO} from '@/helpers/time/formatDate'
 import {colorIsDark} from '@/helpers/color/colorIsDark'
-import {useTaskStore} from '@/stores/tasks'
+import {useTaskActions} from '@/composables/useTaskActions'
 import AssigneeList from '@/components/tasks/partials/AssigneeList.vue'
 import {playPopSound} from '@/helpers/playPop'
 import {isEditorContentEmpty} from '@/helpers/editorContentEmpty'
@@ -174,7 +174,7 @@ const projectTitle = computed(() => {
 		return
 	}
 	
-	const project = projectList.projects[props.task.project_id]
+	const project = projectList.projects[props.task.project_id ?? 0]
 	return project?.title
 })
 
@@ -184,17 +184,17 @@ const {now} = useGlobalNow()
 const isOverdue = computed(() => (
 	!props.task.done &&
 	props.task.due_date !== null &&
-	props.task.due_date.getTime() > 0 &&
-	props.task.due_date.getTime() <= now.value.getTime()
+	new Date(props.task.due_date ?? 0).getTime() > 0 &&
+	new Date(props.task.due_date ?? 0).getTime() <= now.value.getTime()
 ))
 
 async function toggleTaskDone(task: ITask) {
-	const isRecurringTask = task.repeat_after.amount > 0 || task.repeat_mode === TASK_REPEAT_MODES.REPEAT_MODE_MONTH
+	const isRecurringTask = (task.repeat_after ?? 0) > 0 || task.repeat_mode === TASK_REPEAT_MODES.REPEAT_MODE_MONTH
 	const wasBeingMarkedDone = !task.done
 	
 	loadingInternal.value = true
 	try {
-		const updatedTask = await useTaskStore().update({
+		const updatedTask = await useTaskActions().update({
 			...task,
 			done: !task.done,
 		})
@@ -228,12 +228,12 @@ async function maybeDownloadCoverImage() {
 		return
 	}
 
-	const attachment = props.task.attachments.find(a => a.id === props.task.cover_image_attachment_id)
-	if (!attachment || !SUPPORTED_IMAGE_SUFFIX.some((suffix) => attachment.file.name.toLowerCase().endsWith(suffix))) {
+	const attachment = props.task.attachments?.find(a => a.id === props.task.cover_image_attachment_id)
+	if (!attachment || !SUPPORTED_IMAGE_SUFFIX.some((suffix) => (attachment.file?.name ?? '').toLowerCase().endsWith(suffix))) {
 		return
 	}
 
-	coverImageBlobUrl.value = await fetchAttachmentBlobUrl(attachment, PREVIEW_SIZE.LG)
+	coverImageBlobUrl.value = await fetchAttachmentBlobUrl({id: attachment.id!, taskId: props.task.id!}, PREVIEW_SIZE.LG)
 }
 
 watch(

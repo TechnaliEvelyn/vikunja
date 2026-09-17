@@ -212,7 +212,7 @@
 					{{ $t('user.settings.general.quickAddDefaultRemindersHint') }}
 				</p>
 				<Reminders
-					v-model="settings.frontendSettings.quickAddDefaultReminders"
+					v-model="quickAddDefaultReminders"
 					:default-relative-to="REMINDER_PERIOD_RELATIVE_TO_TYPES.DUEDATE"
 					:allow-absolute="false"
 				/>
@@ -444,6 +444,11 @@ const settings = ref<IUserSettings>({
 		quickAddDefaultReminders: [...(authStore.settings.frontendSettings.quickAddDefaultReminders ?? [])],
 		timeTrackingDefaultStart: authStore.settings.frontendSettings.timeTrackingDefaultStart ?? '09:00',
 	},
+})
+
+const quickAddDefaultReminders = computed({
+	get: () => settings.value.frontendSettings.quickAddDefaultReminders.map(reminder => ({relative_period: reminder.relativePeriod})),
+	set: reminders => { settings.value.frontendSettings.quickAddDefaultReminders = reminders.map(reminder => ({relativePeriod: reminder.relative_period})) },
 })
 
 const initialSettings = ref<IUserSettings>()

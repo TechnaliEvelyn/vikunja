@@ -44,6 +44,7 @@ export function buildRelationArrows(
 			for (const related of relatedTasks) {
 				let fromId = taskId
 				let toId = related.id
+				if (toId === undefined) continue
 
 				// Re-route hidden tasks to their visible ancestor
 				if (hiddenToAncestor.has(fromId)) {

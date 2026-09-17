@@ -3,7 +3,7 @@
 		<div
 			v-for="(r, index) in reminders"
 			:key="index"
-			:data-is-overdue="r.reminder && r.reminder < now || undefined"
+			:data-is-overdue="r.reminder && new Date(r.reminder) < now || undefined"
 			class="reminder-input"
 		>
 			<ReminderDetail
@@ -76,8 +76,8 @@ function updateData() {
 	emit('update:modelValue', [...reminders.value])
 }
 
-function addNewReminder(newReminder: ITaskReminder|null) {
-	if (newReminder === null) {
+function addNewReminder(newReminder: ITaskReminder | undefined) {
+	if (!newReminder) {
 		return
 	}
 	reminders.value.push(newReminder)
