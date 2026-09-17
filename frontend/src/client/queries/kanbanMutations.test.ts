@@ -19,9 +19,9 @@ describe('board mutations', () => {
 	it('retains embedded tasks when a bucket update returns metadata only', async () => {
 		const client = new QueryClient()
 		const key = kanbanKeys.board(1, 2)
-		client.setQueryData(key, {buckets: [{id: 3, title: 'old', tasks: [{id: 1}]}], pages: {3: 1}, hasMore: {3: false}})
-		sdk.bucketsUpdate.mockResolvedValue({data: {id: 3, title: 'new', tasks: null}})
+		client.setQueryData(key, {buckets: [{id: 3, title: 'old', count: 1, tasks: [{id: 1}]}], pages: {3: 1}, hasMore: {3: false}})
+		sdk.bucketsUpdate.mockResolvedValue({data: {id: 3, title: 'new', count: 0, tasks: null}})
 		await client.getMutationCache().build(client, updateBucketMutationOptions()).execute({project: 1, view: 2, bucket: {id: 3, title: 'new'}})
-		expect(client.getQueryData<BoardData>(key)?.buckets[0]).toMatchObject({title: 'new', tasks: [{id: 1}]})
+		expect(client.getQueryData<BoardData>(key)?.buckets[0]).toMatchObject({title: 'new', count: 1, tasks: [{id: 1}]})
 	})
 })

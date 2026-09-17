@@ -26,7 +26,7 @@ export function updateBucketMutationOptions() {
 			queryKeys: ({project, view}) => [[...kanbanKeys.all, project, view]],
 			update: ({project, view, bucket}, client) => client.setQueriesData<BoardData>({queryKey: [...kanbanKeys.all, project, view]}, current => current ? {...current, buckets: current.buckets.map(item => item.id === bucket.id ? {...item, ...bucket} : item)} : current),
 		},
-		onSuccess: (bucket, {project, view}, client) => client.setQueriesData<BoardData>({queryKey: [...kanbanKeys.all, project, view]}, current => current ? {...current, buckets: current.buckets.map(item => item.id === bucket.id ? {...item, ...bucket, tasks: item.tasks} : item).sort((a, b) => (a.position ?? 0) - (b.position ?? 0))} : current),
+		onSuccess: (bucket, {project, view}, client) => client.setQueriesData<BoardData>({queryKey: [...kanbanKeys.all, project, view]}, current => current ? {...current, buckets: current.buckets.map(item => item.id === bucket.id ? {...item, ...bucket, tasks: item.tasks, count: item.count} : item).sort((a, b) => (a.position ?? 0) - (b.position ?? 0))} : current),
 		onSettled: (_input, client) => invalidateTaskMembership(client),
 	})
 }
