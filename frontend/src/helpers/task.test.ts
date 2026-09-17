@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest'
 import {createTaskDraft, getTaskIdentifier, getHexColor, parseRepeatAfter, repeatAfterToSeconds, replaceTask, removeTask, moveTaskToBucket, getDefaultBucketId, buildDefaultRemindersForQuickAdd, buildQuickAddTask} from './task'
-import {PrefixMode} from '@/modules/quickAddMagic'
+import {parseTaskText, PrefixMode} from '@/modules/quickAddMagic'
 import type {Bucket, Task} from '@/client/generated'
 import type {IRepeatAfter} from '@/types/IRepeatAfter'
 
@@ -59,10 +59,12 @@ describe('task domain helpers', () => {
 		expect(buildDefaultRemindersForQuickAdd(defaults, '2026-09-17T12:00:00Z')).toEqual([{relative_period: -900, relative_to: 'due_date'}])
 	})
 	it('cleans only resolved assignees while preserving quick-add labels', () => {
-		const result = buildQuickAddTask({title: 'Task @alice @missing *label', project_id: 1}, PrefixMode.Default, [{id: 2, username: 'alice', match: 'alice'}])
-		expect(result.task.title).toBe('Task @missing')
-		expect(result.task.assignees).toEqual([{id: 2, username: 'alice'}])
-		expect(result.parsedLabels).toEqual(['label'])
+		const input = {title: 'Task @alice @missing *label', project_id: 1}
+		const parsed = parseTaskText(input.title, PrefixMode.Default)
+		const task = buildQuickAddTask(parsed, input, PrefixMode.Default, [{id: 2, username: 'alice', match: 'alice'}])
+		expect(task.title).toBe('Task @missing')
+		expect(task.assignees).toEqual([{id: 2, username: 'alice'}])
+		expect(parsed.labels).toEqual(['label'])
 	})
 })
 
